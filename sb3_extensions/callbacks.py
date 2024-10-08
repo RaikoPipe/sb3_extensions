@@ -168,3 +168,14 @@ class StopTrainingOnSuccessThreshold(BaseCallback):
                 f" is above the threshold {self.success_threshold}"
             )
         return continue_training
+
+class RecordCustomMetricsCallback(BaseCallback):
+    def __init__(self, metrics, verbose=0):
+        super(RecordCustomMetricsCallback, self).__init__(verbose)
+        self.metrics = metrics
+
+    def _on_step(self) -> bool:
+        for name,value in self.metrics.items():
+            self.logger.record(name, value)
+
+        return True
