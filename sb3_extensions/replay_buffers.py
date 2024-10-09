@@ -1,34 +1,8 @@
+from stable_baselines3.common.vec_env import VecEnv
 from stable_baselines3.her.her_replay_buffer import HerReplayBuffer
 import numpy as np
 from enum import Enum
-
-class GoalSelectionStrategy(Enum):
-    """
-    The strategies for selecting new goals when
-    creating artificial transitions.
-    """
-
-    # Select a goal that was achieved
-    # after the current step, in the same episode
-    FUTURE = 0
-    # Select a goal that was achieved
-    # after the current step, in the same episode, with the exception of the final state
-    FUTURE_EXCEPT_FINAL = 3
-    # Select the goal that was achieved
-    # at the end of the episode
-    FINAL = 1
-    # Select a goal that was achieved in the episode
-    EPISODE = 2
-
-
-# For convenience
-# that way, we can use string to select a strategy
-KEY_TO_GOAL_STRATEGY = {
-    "future": GoalSelectionStrategy.FUTURE,
-    "future_except_final": GoalSelectionStrategy.FUTURE_EXCEPT_FINAL,
-    "final": GoalSelectionStrategy.FINAL,
-    "episode": GoalSelectionStrategy.EPISODE,
-}
+from goal_selection_strategy import GoalSelectionStrategy
 
 class CustomHerReplayBuffer(HerReplayBuffer):
     def ___init___(self,
@@ -44,7 +18,7 @@ class CustomHerReplayBuffer(HerReplayBuffer):
         :param env_indices: Indices of the environments
         :return: Sampled goals
         """
-        # todo: Don't sample goals from failed states
+
         batch_ep_start = self.ep_start[batch_indices, env_indices]
         batch_ep_length = self.ep_length[batch_indices, env_indices]
 
@@ -71,3 +45,19 @@ class CustomHerReplayBuffer(HerReplayBuffer):
 
         transition_indices = (transition_indices_in_episode + batch_ep_start) % self.buffer_size
         return self.next_observations["achieved_goal"][transition_indices, env_indices]
+
+    def close_env(self):
+        self.env.close()
+
+    def set_env(self, env: VecEnv) -> None:
+        """
+        Sets the environment.
+
+        :param env:
+        """
+        # fixme: Setting an environment with model.set_env() should also set the environment for her buffer.
+        #  Currently the old env remains in the buffer, which leads to BrokenPipeErrors when the environment is closed.
+        # if self.env is not None:
+        #    raise ValueError("Trying to set env of already initialized environment.")
+
+        self.env = env
