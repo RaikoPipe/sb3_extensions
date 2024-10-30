@@ -2,7 +2,7 @@ from stable_baselines3.common.vec_env import VecEnv
 from stable_baselines3.her.her_replay_buffer import HerReplayBuffer
 import numpy as np
 from enum import Enum
-from goal_selection_strategy import GoalSelectionStrategy
+from sb3_extensions.goal_selection_strategy import GoalSelectionStrategy
 
 class CustomHerReplayBuffer(HerReplayBuffer):
     def ___init___(self,
