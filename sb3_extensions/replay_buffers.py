@@ -2,13 +2,26 @@ from stable_baselines3.common.vec_env import VecEnv
 from stable_baselines3.her.her_replay_buffer import HerReplayBuffer
 import numpy as np
 from enum import Enum
-from goal_selection_strategy import GoalSelectionStrategy
+from sb3_extensions.goal_selection_strategy import GoalSelectionStrategy, KEY_TO_GOAL_STRATEGY
 
 class CustomHerReplayBuffer(HerReplayBuffer):
     def ___init___(self,
                    *args,
                    **kwargs):
         super().__init__(*args, **kwargs)
+
+        # convert goal_selection_strategy into GoalSelectionStrategy if string
+        goal_selection_strategy = kwargs.get("goal_selection_strategy", GoalSelectionStrategy.FUTURE)
+
+        if isinstance(goal_selection_strategy, str):
+            self.goal_selection_strategy = KEY_TO_GOAL_STRATEGY[goal_selection_strategy.lower()]
+        else:
+            self.goal_selection_strategy = goal_selection_strategy
+
+        # check if goal_selection_strategy is valid
+        assert isinstance(
+            self.goal_selection_strategy, GoalSelectionStrategy
+        ), f"Invalid goal selection strategy, please use one of {list(GoalSelectionStrategy)}"
 
     def _sample_goals(self, batch_indices: np.ndarray, env_indices: np.ndarray) -> np.ndarray:
         """

@@ -19,6 +19,9 @@ class EvalSuccessCallback(EvalCallback):
             *args,
             **kwargs
     ):
+        self.eval_log_name = kwargs.pop("eval_log_name", "eval")
+        if self.eval_log_name is None:
+            self.eval_log_name = "eval"
         super().__init__(*args, **kwargs)
 
         self.best_mean_success_rate = 0.0
@@ -82,14 +85,14 @@ class EvalSuccessCallback(EvalCallback):
                     f"Eval num_timesteps={self.num_timesteps}, " f"episode_reward={mean_reward:.2f} +/- {std_reward:.2f}")
                 print(f"Episode length: {mean_ep_length:.2f} +/- {std_ep_length:.2f}")
             # Add to current Logger
-            self.logger.record("eval/mean_reward", float(mean_reward))
-            self.logger.record("eval/mean_ep_length", mean_ep_length)
+            self.logger.record(f"{self.eval_log_name}/mean_reward", float(mean_reward))
+            self.logger.record(f"{self.eval_log_name}/mean_ep_length", mean_ep_length)
 
             if len(self._is_success_buffer) > 0:
                 success_rate = np.mean(self._is_success_buffer)
                 if self.verbose >= 1:
                     print(f"Success rate: {100 * success_rate:.2f}%")
-                self.logger.record("eval/success_rate", success_rate)
+                self.logger.record(f"{self.eval_log_name}/success_rate", success_rate)
 
             # Dump log so the evaluation results are printed with the correct timestep
             self.logger.record("time/total_timesteps", self.num_timesteps, exclude="tensorboard")
