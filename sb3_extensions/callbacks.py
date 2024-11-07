@@ -8,6 +8,14 @@ from stable_baselines3.common.evaluation import evaluate_policy
 from stable_baselines3.common.utils import safe_mean
 from stable_baselines3.common.vec_env import sync_envs_normalization
 
+try:
+    import nvidia_smi
+    NVIDIA_SMI_AVAILABLE = True
+except ImportError:
+    NVIDIA_SMI_AVAILABLE = False
+import psutil
+import time
+
 
 class EvalSuccessCallback(EvalCallback):
     """
@@ -182,3 +190,98 @@ class RecordCustomMetricsCallback(BaseCallback):
             self.logger.record(name, value)
 
         return True
+
+
+class ResourceMonitorCallback(BaseCallback):
+    """
+    Custom callback for monitoring CPU and GPU usage during training.
+    """
+
+    def __init__(self, print_freq=1000, verbose=1):
+        """
+        Parameters:
+        -----------
+        print_freq: int
+            Number of timesteps between prints
+        verbose: int
+            Verbosity level
+        """
+        super().__init__(verbose)
+        self.print_freq = print_freq
+
+        # Initialize nvidia-smi if available
+        if NVIDIA_SMI_AVAILABLE:
+            nvidia_smi.nvmlInit()
+            self.gpu_handle = nvidia_smi.nvmlDeviceGetHandleByIndex(0)  # GPU 0
+
+        # Store history for plotting later if needed
+        self.cpu_usages = []
+        self.gpu_usages = []
+        self.gpu_memories = []
+        self.timestamps = []
+        self.start_time = None
+
+    def _on_training_start(self):
+        self.start_time = time.time()
+
+    def _on_step(self):
+        if self.n_calls % self.print_freq == 0:
+            # Get CPU usage
+            cpu_percent = psutil.cpu_percent()
+
+            # Get memory usage
+            memory = psutil.virtual_memory()
+            memory_percent = memory.percent
+
+            # Get GPU stats if available
+            if NVIDIA_SMI_AVAILABLE:
+                gpu_info = nvidia_smi.nvmlDeviceGetUtilizationRates(self.gpu_handle)
+                gpu_memory = nvidia_smi.nvmlDeviceGetMemoryInfo(self.gpu_handle)
+                gpu_util = gpu_info.gpu
+                gpu_mem_used = gpu_memory.used / gpu_memory.total * 100
+            else:
+                gpu_util = None
+                gpu_mem_used = None
+
+            # Calculate elapsed time
+            elapsed_time = time.time() - self.start_time
+            hours, rem = divmod(elapsed_time, 3600)
+            minutes, seconds = divmod(rem, 60)
+
+            # Store metrics
+            self.cpu_usages.append(cpu_percent)
+            self.gpu_usages.append(gpu_util if gpu_util is not None else 0)
+            self.gpu_memories.append(gpu_mem_used if gpu_mem_used is not None else 0)
+            self.timestamps.append(elapsed_time)
+
+            if self.verbose >= 1:
+                # Print status
+                print("\n=== Resource Usage ===")
+                print(f"Time: {int(hours):02d}:{int(minutes):02d}:{int(seconds):02d}")
+                print(f"CPU Usage: {cpu_percent:.1f}%")
+                print(f"Memory Usage: {memory_percent:.1f}%")
+                if NVIDIA_SMI_AVAILABLE:
+                    print(f"GPU Utilization: {gpu_util}%")
+                    print(f"GPU Memory Used: {gpu_mem_used:.1f}%")
+                print("===================\n")
+
+            # log metrics
+            self.logger.record("cpu/usage", cpu_percent)
+            self.logger.record("memory/usage", memory_percent)
+            if NVIDIA_SMI_AVAILABLE:
+                self.logger.record("gpu/usage", gpu_util)
+                self.logger.record("gpu/memory_usage", gpu_mem_used)
+        return True
+
+    def _on_training_end(self):
+        if NVIDIA_SMI_AVAILABLE:
+            nvidia_smi.nvmlShutdown()
+
+        if self.verbose >= 1:
+            # Print summary statistics
+            print("\n=== Training Summary ===")
+            print(f"Average CPU Usage: {np.mean(self.cpu_usages):.1f}%")
+            if NVIDIA_SMI_AVAILABLE:
+                print(f"Average GPU Usage: {np.mean(self.gpu_usages):.1f}%")
+                print(f"Average GPU Memory Usage: {np.mean(self.gpu_memories):.1f}%")
+            print("=====================")

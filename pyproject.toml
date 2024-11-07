@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "sb3-extensions"
-version = "0.0.5"
+version = "0.0.6"
 authors = [
   { name="Richard Reider", email="richard.reider@ovgu.de" },
 ]
@@ -16,6 +16,14 @@ classifiers = [
     "License :: OSI Approved :: MIT License",
     "Operating System :: OS Independent",
 ]
+keywords = ["scratch", "sb3", "extensions"]
+dependencies = [
+    "stable-baselines3>=2.0.0",
+    "psutil>=6.0.0",
+    "nvidia-smi>=0.1.3",
+    "numpy>=1.20.0"
+]
+
 
 [project.urls]
 Homepage = "https://github.com/RaikoPipe/sb3_extensions"
