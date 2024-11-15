@@ -180,13 +180,14 @@ class StopTrainingOnSuccessThreshold(BaseCallback):
             )
         return continue_training
 
+
 class RecordCustomMetricsCallback(BaseCallback):
     def __init__(self, metrics, verbose=0):
         super(RecordCustomMetricsCallback, self).__init__(verbose)
         self.metrics = metrics
 
     def _on_step(self) -> bool:
-        for name,value in self.metrics.items():
+        for name, value in self.metrics.items():
             self.logger.record(name, value)
 
         return True
@@ -225,52 +226,42 @@ class ResourceMonitorCallback(BaseCallback):
         self.start_time = time.time()
 
     def _on_step(self):
-        if self.n_calls % self.print_freq == 0:
-            # Get CPU usage
-            cpu_percent = psutil.cpu_percent()
 
-            # Get memory usage
-            memory = psutil.virtual_memory()
-            memory_percent = memory.percent
+        # Get CPU usage
+        cpu_percent = psutil.cpu_percent()
 
-            # Get GPU stats if available
-            if NVIDIA_SMI_AVAILABLE:
-                gpu_info = nvidia_smi.nvmlDeviceGetUtilizationRates(self.gpu_handle)
-                gpu_memory = nvidia_smi.nvmlDeviceGetMemoryInfo(self.gpu_handle)
-                gpu_util = gpu_info.gpu
-                gpu_mem_used = gpu_memory.used / gpu_memory.total * 100
-            else:
-                gpu_util = None
-                gpu_mem_used = None
+        # Get memory usage
+        memory = psutil.virtual_memory()
+        memory_percent = memory.percent
 
-            # Calculate elapsed time
-            elapsed_time = time.time() - self.start_time
-            hours, rem = divmod(elapsed_time, 3600)
-            minutes, seconds = divmod(rem, 60)
+        # Get GPU stats if available
+        if NVIDIA_SMI_AVAILABLE:
+            gpu_info = nvidia_smi.nvmlDeviceGetUtilizationRates(self.gpu_handle)
+            gpu_memory = nvidia_smi.nvmlDeviceGetMemoryInfo(self.gpu_handle)
+            gpu_util = gpu_info.gpu
+            gpu_mem_used = gpu_memory.used / gpu_memory.total * 100
+        else:
+            gpu_util = None
+            gpu_mem_used = None
 
-            # Store metrics
-            self.cpu_usages.append(cpu_percent)
-            self.gpu_usages.append(gpu_util if gpu_util is not None else 0)
-            self.gpu_memories.append(gpu_mem_used if gpu_mem_used is not None else 0)
-            self.timestamps.append(elapsed_time)
+        # Calculate elapsed time
+        elapsed_time = time.time() - self.start_time
+        hours, rem = divmod(elapsed_time, 3600)
+        minutes, seconds = divmod(rem, 60)
 
-            if self.verbose >= 1:
-                # Print status
-                print("\n=== Resource Usage ===")
-                print(f"Time: {int(hours):02d}:{int(minutes):02d}:{int(seconds):02d}")
-                print(f"CPU Usage: {cpu_percent:.1f}%")
-                print(f"Memory Usage: {memory_percent:.1f}%")
-                if NVIDIA_SMI_AVAILABLE:
-                    print(f"GPU Utilization: {gpu_util}%")
-                    print(f"GPU Memory Used: {gpu_mem_used:.1f}%")
-                print("===================\n")
+        # Store metrics
+        self.cpu_usages.append(cpu_percent)
+        self.gpu_usages.append(gpu_util if gpu_util is not None else 0)
+        self.gpu_memories.append(gpu_mem_used if gpu_mem_used is not None else 0)
+        self.timestamps.append(elapsed_time)
 
-            # log metrics
-            self.logger.record("cpu/usage", cpu_percent)
-            self.logger.record("memory/usage", memory_percent)
-            if NVIDIA_SMI_AVAILABLE:
-                self.logger.record("gpu/usage", gpu_util)
-                self.logger.record("gpu/memory_usage", gpu_mem_used)
+
+        # log metrics
+        self.logger.record("cpu/usage", cpu_percent)
+        self.logger.record("memory/usage", memory_percent)
+        if NVIDIA_SMI_AVAILABLE:
+            self.logger.record("gpu/usage", gpu_util)
+            self.logger.record("gpu/memory_usage", gpu_mem_used)
         return True
 
     def _on_training_end(self):
@@ -285,3 +276,48 @@ class ResourceMonitorCallback(BaseCallback):
                 print(f"Average GPU Usage: {np.mean(self.gpu_usages):.1f}%")
                 print(f"Average GPU Memory Usage: {np.mean(self.gpu_memories):.1f}%")
             print("=====================")
+
+
+class PeriodicSaveCallback(BaseCallback):
+    """
+    Callback for saving the model periodically during training.
+
+    :param save_freq: Number of timesteps between saves
+    :param save_path: Path to save the models
+    :param name_prefix: Prefix for the saved model files
+    """
+
+    def __init__(self, save_freq: int = 10000, save_path: str = "./models",
+                 name_prefix: str = "model", verbose: int = 1):
+        super().__init__(verbose)
+        self.save_freq = save_freq
+        self.save_path = save_path
+        self.name_prefix = name_prefix
+
+        # Create save directory if it doesn't exist
+        if not os.path.exists(save_path):
+            os.makedirs(save_path)
+
+    def _init_callback(self) -> None:
+        """
+        Initialize callback variables
+        """
+        # Create save path if it doesn't exist
+        if self.save_path is not None:
+            os.makedirs(self.save_path, exist_ok=True)
+
+    def _on_step(self) -> bool:
+        """
+        Save the model if the number of timesteps is divisible by save_freq
+
+        :return: True if the callback should continue
+        """
+        if self.n_calls % self.save_freq == 0:
+            path = os.path.join(
+                self.save_path,
+                f"{self.name_prefix}_{self.n_calls}_steps.zip"
+            )
+            self.model.save(path)
+            if self.verbose > 0:
+                print(f"Saving model checkpoint to {path}")
+        return True
